@@ -207,116 +207,183 @@ if filtro_est != "Todos":
 if solo_sin and "Conectado_SIN" in df_filt.columns:
     df_filt = df_filt[df_filt["Conectado_SIN"] == True]
 
-# --- Título y resumen ---
-st.subheader("📊 Vista general")
-st.caption(f"Mostrando **{len(df_filt)}** de **{len(df)}** proyectos")
+# Datos activos: se inicializan una vez; "Restablecer" en Cualitativo aplica filtros del sidebar
+if "edited_df" not in st.session_state:
+    st.session_state.edited_df = df_filt.copy()
 
-# --- KPIs ---
-col1, col2, col3, col4, col5 = st.columns(5)
-
-with col1:
-    st.metric("Proyectos", len(df_filt))
-
-with col2:
-    cap_total = df_filt["Capacidad_Instalada_MW"].sum() if "Capacidad_Instalada_MW" in df_filt.columns else 0
-    st.metric("Capacidad total (MW)", f"{cap_total:,.0f}")
-
-with col3:
-    gen_total = df_filt["Generacion_Diaria_MWh"].sum() if "Generacion_Diaria_MWh" in df_filt.columns else 0
-    st.metric("Generación diaria (MWh)", f"{gen_total:,.0f}")
-
-with col4:
-    inv_total = df_filt["Inversion_Inicial_MUSD"].sum() if "Inversion_Inicial_MUSD" in df_filt.columns else 0
-    st.metric("Inversión (M USD)", f"{inv_total:,.0f}")
-
-with col5:
-    efic_media = df_filt["Eficiencia_Planta_Pct"].mean() if "Eficiencia_Planta_Pct" in df_filt.columns else 0
-    st.metric("Eficiencia media (%)", f"{efic_media:.1f}")
-
-st.divider()
-
-# --- Gráficos ---
-st.subheader("📈 Visualizaciones")
-
-row1_col1, row1_col2 = st.columns(2)
-
-with row1_col1:
-    if "Tecnologia" in df_filt.columns:
-        st.markdown("**Proyectos por tecnología**")
-        count_tec = df_filt["Tecnologia"].value_counts().reset_index()
-        count_tec.columns = ["Tecnologia", "Cantidad"]
-        fig_tec = px.bar(
-            count_tec, x="Tecnologia", y="Cantidad",
-            color="Cantidad", color_continuous_scale="Teal",
-            labels={"Tecnologia": "Tecnología", "Cantidad": "Nº proyectos"},
-        )
-        fig_tec.update_layout(showlegend=False, margin=dict(t=10, b=10), font=dict(size=12))
-        fig_tec.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,249,0.8)")
-        st.plotly_chart(fig_tec, use_container_width=True)
-
-with row1_col2:
-    if "Estado_Actual" in df_filt.columns:
-        st.markdown("**Proyectos por estado**")
-        count_est = df_filt["Estado_Actual"].value_counts().reset_index()
-        count_est.columns = ["Estado_Actual", "Cantidad"]
-        fig_est = px.pie(
-            count_est, values="Cantidad", names="Estado_Actual",
-            color_discrete_sequence=px.colors.sequential.Teal_r,
-            hole=0.45,
-        )
-        fig_est.update_layout(margin=dict(t=10, b=10), font=dict(size=12))
-        fig_est.update_layout(paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_est, use_container_width=True)
-
-row2_col1, row2_col2 = st.columns(2)
-
-with row2_col1:
-    if "Operador" in df_filt.columns and "Capacidad_Instalada_MW" in df_filt.columns:
-        st.markdown("**Capacidad instalada por operador (MW)**")
-        cap_op = df_filt.groupby("Operador")["Capacidad_Instalada_MW"].sum().reset_index()
-        cap_op = cap_op.sort_values("Capacidad_Instalada_MW", ascending=True)
-        fig_cap = px.bar(
-            cap_op, x="Capacidad_Instalada_MW", y="Operador",
-            orientation="h", color="Capacidad_Instalada_MW",
-            color_continuous_scale="Teal",
-            labels={"Capacidad_Instalada_MW": "MW", "Operador": "Operador"},
-        )
-        fig_cap.update_layout(showlegend=False, margin=dict(t=10, b=10), font=dict(size=12))
-        fig_cap.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,249,0.8)")
-        st.plotly_chart(fig_cap, use_container_width=True)
-
-with row2_col2:
-    if "Fecha_Entrada_Operacion" in df_filt.columns:
-        st.markdown("**Proyectos por año de entrada en operación**")
-        df_filt = df_filt.copy()
-        df_filt["Año"] = df_filt["Fecha_Entrada_Operacion"].dt.year
-        count_año = df_filt.dropna(subset=["Año"]).groupby("Año").size().reset_index(name="Cantidad")
-        fig_año = px.line(
-            count_año, x="Año", y="Cantidad",
-            markers=True,
-            labels={"Año": "Año", "Cantidad": "Proyectos"},
-            color_discrete_sequence=["#1a5f4a"],
-        )
-        fig_año.update_layout(margin=dict(t=10, b=10), font=dict(size=12))
-        fig_año.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,249,0.8)")
-        st.plotly_chart(fig_año, use_container_width=True)
-
-# --- Tabla ---
-st.divider()
-st.subheader("📋 Tabla de datos (filtrada)")
-
+# Columnas para mostrar en tablas
 columnas_esperadas = [
     "ID_Proyecto", "Tecnologia", "Operador", "Capacidad_Instalada_MW",
     "Generacion_Diaria_MWh", "Eficiencia_Planta_Pct", "Estado_Actual",
     "Inversion_Inicial_MUSD", "Fecha_Entrada_Operacion",
 ]
-columnas_mostrar = [c for c in columnas_esperadas if c in df_filt.columns]
-if not columnas_mostrar:
-    columnas_mostrar = df_filt.columns.tolist()
+columnas_tabla = [c for c in columnas_esperadas if c in df_filt.columns]
+if not columnas_tabla:
+    columnas_tabla = df_filt.columns.tolist()
 
-sort_col = "Capacidad_Instalada_MW" if "Capacidad_Instalada_MW" in df_filt.columns else columnas_mostrar[0]
-st.dataframe(
-    df_filt[columnas_mostrar].sort_values(sort_col, ascending=False),
-    use_container_width=True,
-    height=350,
-)
+st.caption(f"📌 Mostrando **{len(df_filt)}** de **{len(df)}** proyectos. Los cambios en **Cualitativo** se reflejan en los demás bloques.")
+
+# --- Tres bloques: Cuantitativo | Cualitativo | Gráfico ---
+tab_cuant, tab_cual, tab_graf = st.tabs(["📊 Bloque Cuantitativo", "📋 Bloque Cualitativo", "📈 Bloque Gráfico"])
+
+# ---------- BLOQUE CUANTITATIVO ----------
+with tab_cuant:
+    st.subheader("Métricas numéricas")
+    st.markdown("Indicadores y estadísticas descriptivas de los datos (según filtros y ediciones).")
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+    d = st.session_state.edited_df
+
+    with col1:
+        st.metric("Proyectos", len(d))
+    with col2:
+        cap = d["Capacidad_Instalada_MW"].sum() if "Capacidad_Instalada_MW" in d.columns else 0
+        st.metric("Capacidad total (MW)", f"{cap:,.0f}")
+    with col3:
+        gen = d["Generacion_Diaria_MWh"].sum() if "Generacion_Diaria_MWh" in d.columns else 0
+        st.metric("Generación diaria (MWh)", f"{gen:,.0f}")
+    with col4:
+        inv = d["Inversion_Inicial_MUSD"].sum() if "Inversion_Inicial_MUSD" in d.columns else 0
+        st.metric("Inversión (M USD)", f"{inv:,.0f}")
+    with col5:
+        efic = d["Eficiencia_Planta_Pct"].mean() if "Eficiencia_Planta_Pct" in d.columns else 0
+        st.metric("Eficiencia media (%)", f"{efic:.1f}")
+
+    st.markdown("---")
+    st.markdown("**Estadísticas descriptivas** (variables numéricas)")
+    numeric_cols = d.select_dtypes(include=["number"]).columns.tolist()
+    if numeric_cols:
+        st.dataframe(d[numeric_cols].describe().round(2), use_container_width=True)
+    else:
+        st.info("No hay columnas numéricas para resumir.")
+
+    # Filtros numéricos interactivos opcionales
+    with st.expander("🔧 Ajustar rango de valores (filtro extra)"):
+        d_cols = st.session_state.edited_df
+        if "Capacidad_Instalada_MW" in d_cols.columns:
+            min_cap = float(d_cols["Capacidad_Instalada_MW"].min())
+            max_cap = float(d_cols["Capacidad_Instalada_MW"].max())
+            rango = st.slider("Capacidad instalada (MW)", min_cap, max_cap, (min_cap, max_cap))
+            mask = (d_cols["Capacidad_Instalada_MW"] >= rango[0]) & (d_cols["Capacidad_Instalada_MW"] <= rango[1])
+            st.session_state.edited_df = d_cols[mask].copy()
+            st.caption(f"Quedan {len(st.session_state.edited_df)} proyectos en este rango.")
+
+# ---------- BLOQUE CUALITATIVO ----------
+with tab_cual:
+    st.subheader("Datos categóricos y tabla editable")
+    st.markdown("Resúmenes por categoría y tabla para **ver y modificar** valores. Los cambios se usan en Cuantitativo y Gráfico.")
+
+    d = st.session_state.edited_df
+
+    # Resúmenes cualitativos
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if "Tecnologia" in d.columns:
+            st.markdown("**Por tecnología**")
+            st.dataframe(d["Tecnologia"].value_counts(), use_container_width=True, height=180)
+    with c2:
+        if "Operador" in d.columns:
+            st.markdown("**Por operador**")
+            st.dataframe(d["Operador"].value_counts(), use_container_width=True, height=180)
+    with c3:
+        if "Estado_Actual" in d.columns:
+            st.markdown("**Por estado**")
+            st.dataframe(d["Estado_Actual"].value_counts(), use_container_width=True, height=180)
+
+    st.markdown("---")
+    st.markdown("**Tabla interactiva** — edita celdas y los cambios se reflejan en los otros bloques.")
+
+    col_sel = [c for c in columnas_tabla if c in d.columns]
+    sort_col = "Capacidad_Instalada_MW" if "Capacidad_Instalada_MW" in d.columns else (col_sel[0] if col_sel else None)
+    tabla_ordenada = d[col_sel].sort_values(sort_col, ascending=False) if sort_col else d[col_sel]
+
+    edited = st.data_editor(
+        tabla_ordenada,
+        use_container_width=True,
+        num_rows="dynamic",
+        key="cualitativo_editor",
+    )
+    st.session_state.edited_df = edited
+
+    b1, b2, b3 = st.columns([1, 1, 2])
+    with b1:
+        if st.button("Restablecer a datos filtrados"):
+            st.session_state.edited_df = df_filt.copy()
+            st.rerun()
+    with b2:
+        # Exportar CSV
+        csv_export = st.session_state.edited_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Descargar tabla actual (CSV)",
+            data=csv_export,
+            file_name="energia_renovable_editado.csv",
+            mime="text/csv",
+        )
+
+# ---------- BLOQUE GRÁFICO ----------
+with tab_graf:
+    st.subheader("Visualizaciones")
+    st.markdown("Gráficos según los datos actuales (filtros y ediciones del bloque Cualitativo).")
+
+    d = st.session_state.edited_df
+
+    row1_col1, row1_col2 = st.columns(2)
+    with row1_col1:
+        if "Tecnologia" in d.columns:
+            st.markdown("**Proyectos por tecnología**")
+            count_tec = d["Tecnologia"].value_counts().reset_index()
+            count_tec.columns = ["Tecnologia", "Cantidad"]
+            fig_tec = px.bar(
+                count_tec, x="Tecnologia", y="Cantidad",
+                color="Cantidad", color_continuous_scale="Teal",
+                labels={"Tecnologia": "Tecnología", "Cantidad": "Nº proyectos"},
+            )
+            fig_tec.update_layout(showlegend=False, margin=dict(t=10, b=10), font=dict(size=12))
+            fig_tec.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,249,0.8)")
+            st.plotly_chart(fig_tec, use_container_width=True)
+
+    with row1_col2:
+        if "Estado_Actual" in d.columns:
+            st.markdown("**Proyectos por estado**")
+            count_est = d["Estado_Actual"].value_counts().reset_index()
+            count_est.columns = ["Estado_Actual", "Cantidad"]
+            fig_est = px.pie(
+                count_est, values="Cantidad", names="Estado_Actual",
+                color_discrete_sequence=px.colors.sequential.Teal_r,
+                hole=0.45,
+            )
+            fig_est.update_layout(margin=dict(t=10, b=10), font=dict(size=12))
+            fig_est.update_layout(paper_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_est, use_container_width=True)
+
+    row2_col1, row2_col2 = st.columns(2)
+    with row2_col1:
+        if "Operador" in d.columns and "Capacidad_Instalada_MW" in d.columns:
+            st.markdown("**Capacidad instalada por operador (MW)**")
+            cap_op = d.groupby("Operador")["Capacidad_Instalada_MW"].sum().reset_index()
+            cap_op = cap_op.sort_values("Capacidad_Instalada_MW", ascending=True)
+            fig_cap = px.bar(
+                cap_op, x="Capacidad_Instalada_MW", y="Operador",
+                orientation="h", color="Capacidad_Instalada_MW",
+                color_continuous_scale="Teal",
+                labels={"Capacidad_Instalada_MW": "MW", "Operador": "Operador"},
+            )
+            fig_cap.update_layout(showlegend=False, margin=dict(t=10, b=10), font=dict(size=12))
+            fig_cap.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,249,0.8)")
+            st.plotly_chart(fig_cap, use_container_width=True)
+
+    with row2_col2:
+        if "Fecha_Entrada_Operacion" in d.columns:
+            st.markdown("**Proyectos por año de entrada en operación**")
+            d_ano = d.copy()
+            d_ano["Año"] = pd.to_datetime(d_ano["Fecha_Entrada_Operacion"], errors="coerce").dt.year
+            count_ano = d_ano.dropna(subset=["Año"]).groupby("Año").size().reset_index(name="Cantidad")
+            fig_ano = px.line(
+                count_ano, x="Año", y="Cantidad",
+                markers=True,
+                labels={"Año": "Año", "Cantidad": "Proyectos"},
+                color_discrete_sequence=["#1a5f4a"],
+            )
+            fig_ano.update_layout(margin=dict(t=10, b=10), font=dict(size=12))
+            fig_ano.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,249,0.8)")
+            st.plotly_chart(fig_ano, use_container_width=True)
