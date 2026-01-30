@@ -59,12 +59,27 @@ st.markdown("""
         color: #1a5f4a !important;
         font-weight: 600 !important;
     }
-    /* Sidebar */
+    /* Sidebar: fondo claro y texto oscuro para buen contraste */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #f0f7f5 0%, #e2ebe8 100%);
+        background-color: #ffffff;
+        border-right: 1px solid #e0e0e0;
+    }
+    [data-testid="stSidebar"] > div:first-child {
+        background-color: #ffffff !important;
     }
     [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2 {
-        color: #1a5f4a !important;
+        color: #1a3d32 !important;
+        font-weight: 700 !important;
+    }
+    [data-testid="stSidebar"] label, [data-testid="stSidebar"] p {
+        color: #1f2937 !important;
+    }
+    [data-testid="stSidebar"] .stRadio label, [data-testid="stSidebar"] .stSelectbox label,
+    [data-testid="stSidebar"] .stCheckbox label {
+        color: #374151 !important;
+    }
+    [data-testid="stSidebar"] .stMarkdown {
+        color: #1f2937 !important;
     }
     /* Ocultar marca de agua de Streamlit (opcional) */
     #MainMenu { visibility: hidden; }
