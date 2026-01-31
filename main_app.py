@@ -20,9 +20,15 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# --- Estilos visuales ---
+# --- Estilos visuales (contraste legible en todos los textos) ---
 st.markdown("""
 <style>
+    /* Texto principal: oscuro sobre claro */
+    .stMarkdown, .stMarkdown p, [data-testid="stMarkdownContainer"] { color: #1a1a1a !important; }
+    .stCaption, [data-testid="stCaption"] { color: #374151 !important; }
+    label, [data-testid="stWidgetLabel"] { color: #1f2937 !important; font-weight: 500 !important; }
+    .stAlert { color: #1f2937 !important; }
+    /* Caja de bienvenida: texto claro sobre fondo oscuro */
     .welcome-box {
         background: linear-gradient(135deg, #1a5f4a 0%, #2d8f6f 50%, #1a5f4a 100%);
         padding: 2rem;
@@ -32,28 +38,34 @@ st.markdown("""
         text-align: center;
         border: 1px solid rgba(255,255,255,0.2);
     }
-    .welcome-box h1 { color: #fff; font-size: 2rem; margin-bottom: 0.5rem; font-weight: 700; }
-    .welcome-box p { color: rgba(255,255,255,0.95); font-size: 1.05rem; margin: 0; }
+    .welcome-box h1 { color: #ffffff !important; font-size: 2rem; margin-bottom: 0.5rem; font-weight: 700; }
+    .welcome-box p { color: rgba(255,255,255,0.98) !important; font-size: 1.05rem; margin: 0; }
     .upload-zone {
-        background: #f8faf9;
-        border: 2px dashed #2d8f6f;
+        background: #f0f4f3;
+        border: 2px dashed #1a5f4a;
         border-radius: 12px;
         padding: 2rem;
         text-align: center;
         margin-bottom: 1.5rem;
     }
+    /* KPIs: etiquetas y valores oscuros */
     div[data-testid="stMetric"] {
-        background: linear-gradient(145deg, #f8faf9 0%, #e8f0ee 100%);
+        background: #ffffff;
         padding: 1rem 1.25rem;
         border-radius: 12px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-        border: 1px solid rgba(26, 95, 74, 0.15);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        border: 1px solid #d1d5db;
     }
-    div[data-testid="stMetric"] label { color: #1a5f4a !important; font-weight: 600 !important; }
-    h2, h3 { color: #1a5f4a !important; font-weight: 600 !important; }
-    [data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #e0e0e0; }
+    div[data-testid="stMetric"] label { color: #1a3d32 !important; font-weight: 600 !important; }
+    div[data-testid="stMetric"] [data-testid="stMetricValue"] { color: #111827 !important; }
+    h2, h3 { color: #1a3d32 !important; font-weight: 600 !important; }
+    /* Sidebar */
+    [data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #e5e7eb; }
     [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2 { color: #1a3d32 !important; font-weight: 700 !important; }
     [data-testid="stSidebar"] label, [data-testid="stSidebar"] p { color: #1f2937 !important; }
+    /* Botones y controles */
+    .stButton button { color: #1f2937 !important; }
+    .stSelectbox label, .stSlider label { color: #374151 !important; }
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
 </style>
@@ -141,6 +153,88 @@ def is_energy_context(df):
     energy_hints = {"Tecnologia", "Operador", "Capacidad_Instalada_MW", "Generacion_Diaria_MWh",
                    "Estado_Actual", "Eficiencia_Planta_Pct", "Inversion_Inicial_MUSD", "Fecha_Entrada_Operacion"}
     return len(cols & energy_hints) >= 3
+
+
+def build_all_charts(d, energy_mode, numeric_cols, cat_cols, date_cols):
+    """Construye todas las gráficas disponibles según los datos. Devuelve dict { nombre: fig }. """
+    charts = {}
+    layout_common = dict(paper_bgcolor="rgba(255,255,255,1)", plot_bgcolor="rgba(248,250,249,0.9)", font=dict(color="#1a1a1a"))
+
+    if energy_mode:
+        if "Tecnologia" in d.columns and "Operador" in d.columns:
+            agg = d.groupby(["Tecnologia", "Operador"]).size().reset_index(name="Proyectos")
+            fig = px.sunburst(agg, path=["Tecnologia", "Operador"], values="Proyectos",
+                              color="Proyectos", color_continuous_scale="Teal")
+            fig.update_layout(**layout_common, margin=dict(t=40, b=20))
+            charts["Sunburst: Tecnología y operador"] = fig
+
+        if "Eficiencia_Planta_Pct" in d.columns and "Tecnologia" in d.columns:
+            fig = px.box(d, x="Tecnologia", y="Eficiencia_Planta_Pct", color="Tecnologia", points="outliers")
+            fig.update_layout(showlegend=False, xaxis_tickangle=-45, margin=dict(t=40, b=80), **layout_common)
+            charts["Box: Eficiencia por tecnología"] = fig
+
+        if "Capacidad_Instalada_MW" in d.columns and "Generacion_Diaria_MWh" in d.columns:
+            try:
+                fig = px.scatter(d, x="Capacidad_Instalada_MW", y="Generacion_Diaria_MWh",
+                                 color="Tecnologia" if "Tecnologia" in d.columns else None,
+                                 size="Eficiencia_Planta_Pct" if "Eficiencia_Planta_Pct" in d.columns else None,
+                                 trendline="ols", trendline_scope="overall")
+            except Exception:
+                fig = px.scatter(d, x="Capacidad_Instalada_MW", y="Generacion_Diaria_MWh",
+                                 color="Tecnologia" if "Tecnologia" in d.columns else None,
+                                 size="Eficiencia_Planta_Pct" if "Eficiencia_Planta_Pct" in d.columns else None)
+            fig.update_layout(margin=dict(t=30, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02), **layout_common)
+            charts["Scatter: Capacidad vs Generación"] = fig
+
+        if "Operador" in d.columns and "Capacidad_Instalada_MW" in d.columns:
+            cap_op = d.groupby("Operador")["Capacidad_Instalada_MW"].sum().sort_values(ascending=True)
+            fig = go.Figure(go.Bar(x=cap_op.values, y=cap_op.index, orientation="h",
+                                   marker_color=px.colors.sequential.Teal_r[:len(cap_op)]))
+            fig.update_layout(xaxis_title="Capacidad total (MW)", yaxis_title="Operador", margin=dict(t=20, b=20), showlegend=False, **layout_common)
+            charts["Barras: Capacidad por operador"] = fig
+
+        if "Fecha_Entrada_Operacion" in d.columns:
+            d_ano = d.copy()
+            d_ano["Año"] = pd.to_datetime(d_ano["Fecha_Entrada_Operacion"], errors="coerce").dt.year
+            count_ano = d_ano.dropna(subset=["Año"]).groupby("Año").size().reset_index(name="Proyectos")
+            fig = px.line(count_ano, x="Año", y="Proyectos", markers=True)
+            fig.update_traces(line=dict(width=3), marker=dict(size=10))
+            fig.update_layout(margin=dict(t=40, b=20), **layout_common)
+            charts["Línea: Proyectos por año"] = fig
+
+    if numeric_cols:
+        col_hist = numeric_cols[0]
+        fig = px.histogram(d, x=col_hist, nbins=min(50, max(10, d[col_hist].nunique())))
+        fig.update_layout(margin=dict(t=40, b=20), **layout_common)
+        charts["Histograma: " + col_hist] = fig
+
+    if len(numeric_cols) >= 2:
+        num_sub = numeric_cols[:min(8, len(numeric_cols))]
+        corr = d[num_sub].corr()
+        fig = px.imshow(corr, text_auto=".2f", aspect="auto", color_continuous_scale="RdBu_r", zmin=-1, zmax=1)
+        fig.update_layout(margin=dict(t=40, b=20), **layout_common)
+        charts["Matriz de correlación"] = fig
+
+    if cat_cols and not energy_mode:
+        col_cat = cat_cols[0]
+        cnt = d[col_cat].value_counts().reset_index()
+        cnt.columns = [col_cat, "Cantidad"]
+        fig = px.bar(cnt, x=col_cat, y="Cantidad", color="Cantidad", color_continuous_scale="Teal")
+        fig.update_layout(xaxis_tickangle=-45, margin=dict(t=20, b=80), **layout_common)
+        charts["Barras: " + col_cat] = fig
+
+    if date_cols and d[date_cols[0]].notna().sum() > 0:
+        col_date = date_cols[0]
+        d_temp = d.copy()
+        d_temp["_fecha"] = pd.to_datetime(d_temp[col_date], errors="coerce")
+        d_temp["_periodo"] = d_temp["_fecha"].dt.to_period("M").astype(str)
+        count_temp = d_temp.dropna(subset=["_fecha"]).groupby("_periodo").size().reset_index(name="Cantidad")
+        if len(count_temp) > 0:
+            fig = px.line(count_temp, x="_periodo", y="Cantidad", markers=True)
+            fig.update_layout(xaxis_tickangle=-45, margin=dict(t=40, b=80), **layout_common)
+            charts["Serie temporal: " + col_date] = fig
+
+    return charts
 
 
 # --- Mensaje de bienvenida ---
@@ -334,118 +428,112 @@ with tab_cual:
         st.download_button("Descargar CSV actual", data=st.session_state.edited_df.to_csv(index=False).encode("utf-8"),
                            file_name="datos_editados.csv", mime="text/csv")
 
-# ---------- BLOQUE GRÁFICO (elaborado y contextual) ----------
+# ---------- BLOQUE GRÁFICO (selector, descarga e informe) ----------
 with tab_graf:
     st.subheader("Visualizaciones")
     d = st.session_state.edited_df
 
-    # Contexto energía: gráficos específicos y más elaborados
-    if energy_mode:
-        # 1) Sunburst: Tecnología > Operador > conteo (si existen)
-        if "Tecnologia" in d.columns and "Operador" in d.columns:
-            st.markdown("**Distribución por tecnología y operador** (proyectos de energía renovable)")
-            agg = d.groupby(["Tecnologia", "Operador"]).size().reset_index(name="Proyectos")
-            fig_sun = px.sunburst(agg, path=["Tecnologia", "Operador"], values="Proyectos",
-                                  color="Proyectos", color_continuous_scale="Teal",
-                                  title="Proyectos por tecnología y operador")
-            fig_sun.update_layout(margin=dict(t=40, b=20), font=dict(size=12))
-            fig_sun.update_traces(textinfo="label+value")
-            st.plotly_chart(fig_sun, use_container_width=True)
+    # Construir todas las gráficas disponibles
+    all_charts = build_all_charts(d, energy_mode, numeric_cols, cat_cols, date_cols)
+    chart_names = list(all_charts.keys())
 
-        # 2) Box: Eficiencia por tecnología
-        if "Eficiencia_Planta_Pct" in d.columns and "Tecnologia" in d.columns:
-            st.markdown("**Eficiencia de planta (%) por tecnología**")
-            fig_box = px.box(d, x="Tecnologia", y="Eficiencia_Planta_Pct", color="Tecnologia",
-                            points="outliers", title="Distribución de eficiencia por tipo de tecnología")
-            fig_box.update_layout(showlegend=False, xaxis_tickangle=-45, margin=dict(t=40, b=80))
-            fig_box.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,249,0.8)")
-            st.plotly_chart(fig_box, use_container_width=True)
+    if not chart_names:
+        st.info("No hay gráficas disponibles con los datos actuales (necesitas columnas numéricas o categóricas).")
+    else:
+        # Selector: qué gráfica mostrar
+        opciones = ["Todas"] + chart_names
+        elegida = st.selectbox(
+            "Elegir gráfica a mostrar",
+            opciones,
+            key="sel_grafica",
+            help="Selecciona una gráfica concreta o «Todas» para ver todas.",
+        )
 
-        # 3) Scatter: Capacidad vs Generación
-        if "Capacidad_Instalada_MW" in d.columns and "Generacion_Diaria_MWh" in d.columns:
-            st.markdown("**Capacidad instalada vs generación diaria** (MW vs MWh)")
-            try:
-                fig_sc = px.scatter(d, x="Capacidad_Instalada_MW", y="Generacion_Diaria_MWh",
-                                   color="Tecnologia" if "Tecnologia" in d.columns else None,
-                                   size="Eficiencia_Planta_Pct" if "Eficiencia_Planta_Pct" in d.columns else None,
-                                   hover_data=d.columns.tolist()[:6],
-                                   trendline="ols", trendline_scope="overall")
-            except Exception:
-                fig_sc = px.scatter(d, x="Capacidad_Instalada_MW", y="Generacion_Diaria_MWh",
-                                   color="Tecnologia" if "Tecnologia" in d.columns else None,
-                                   size="Eficiencia_Planta_Pct" if "Eficiencia_Planta_Pct" in d.columns else None,
-                                   hover_data=d.columns.tolist()[:6])
-            fig_sc.update_layout(margin=dict(t=30, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02))
-            fig_sc.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,249,0.8)")
-            st.plotly_chart(fig_sc, use_container_width=True)
+        # Mostrar gráfica(s)
+        if elegida == "Todas":
+            for idx, (nombre, fig) in enumerate(all_charts.items()):
+                st.markdown(f"**{nombre}**")
+                st.plotly_chart(fig, use_container_width=True)
+                html_fig = fig.to_html(full_html=False, include_plotlyjs="cdn")
+                st.download_button(
+                    f"Descargar: {nombre} (HTML)",
+                    data=html_fig.encode("utf-8"),
+                    file_name=f"grafica_{nombre.replace(' ', '_').replace(':', '')[:30]}.html",
+                    mime="text/html",
+                    key=f"dl_graf_{idx}",
+                )
+                st.markdown("---")
+        else:
+            fig = all_charts[elegida]
+            st.plotly_chart(fig, use_container_width=True)
+            html_fig = fig.to_html(full_html=False, include_plotlyjs="cdn")
+            st.download_button(
+                "Descargar esta gráfica (HTML)",
+                data=html_fig.encode("utf-8"),
+                file_name=f"grafica_{elegida.replace(' ', '_').replace(':', '')[:40]}.html",
+                mime="text/html",
+                key="dl_grafica_unica",
+            )
 
-        # 4) Barras horizontales: capacidad por operador (con anotaciones)
-        if "Operador" in d.columns and "Capacidad_Instalada_MW" in d.columns:
-            st.markdown("**Capacidad instalada (MW) por operador**")
-            cap_op = d.groupby("Operador")["Capacidad_Instalada_MW"].sum().sort_values(ascending=True)
-            fig_bar = go.Figure(go.Bar(x=cap_op.values, y=cap_op.index, orientation="h",
-                                       marker_color=px.colors.sequential.Teal_r[:len(cap_op)]))
-            fig_bar.update_layout(xaxis_title="Capacidad total (MW)", yaxis_title="Operador",
-                                  margin=dict(t=20, b=20), showlegend=False)
-            fig_bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,249,0.8)")
-            st.plotly_chart(fig_bar, use_container_width=True)
+        # ---------- Generar informe ----------
+        st.markdown("---")
+        st.markdown("#### Generar informe")
+        st.caption("Genera un informe HTML con resumen de datos y todas las gráficas para descargar.")
 
-        # 5) Línea temporal: proyectos por año de entrada
-        if "Fecha_Entrada_Operacion" in d.columns:
-            st.markdown("**Proyectos por año de entrada en operación**")
-            d_ano = d.copy()
-            d_ano["Año"] = pd.to_datetime(d_ano["Fecha_Entrada_Operacion"], errors="coerce").dt.year
-            count_ano = d_ano.dropna(subset=["Año"]).groupby("Año").size().reset_index(name="Proyectos")
-            fig_ano = px.line(count_ano, x="Año", y="Proyectos", markers=True,
-                              title="Evolución de proyectos por año")
-            fig_ano.update_traces(line=dict(width=3), marker=dict(size=10))
-            fig_ano.update_layout(margin=dict(t=40, b=20), font=dict(size=12))
-            fig_ano.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,249,0.8)")
-            st.plotly_chart(fig_ano, use_container_width=True)
+        from datetime import datetime
+        if st.button("Generar informe (HTML)", key="btn_informe"):
+            report_title = "Informe de análisis de datos"
+            fecha = datetime.now().strftime("%Y-%m-%d %H:%M")
+            n_filas = len(d)
+            n_cols = len(d.columns)
+            num_list = ", ".join(numeric_cols[:10]) if numeric_cols else "Ninguna"
+            cat_list = ", ".join(cat_cols[:10]) if cat_cols else "Ninguna"
+            html_charts = ""
+            for nombre, fig in all_charts.items():
+                html_charts += f"<h3>{nombre}</h3>"
+                html_charts += fig.to_html(full_html=False, include_plotlyjs="cdn")
+                html_charts += "<hr/>"
+            report_html = f"""
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{report_title}</title>
+    <style>
+        body {{ font-family: system-ui, sans-serif; margin: 2rem; max-width: 900px; color: #1a1a1a; line-height: 1.5; }}
+        h1 {{ color: #1a5f4a; border-bottom: 2px solid #2d8f6f; padding-bottom: 0.5rem; }}
+        h2, h3 {{ color: #1a3d32; }}
+        .meta {{ color: #6b7280; margin-bottom: 1.5rem; }}
+        .resumen {{ background: #f0f4f3; padding: 1rem; border-radius: 8px; margin: 1rem 0; }}
+        hr {{ margin: 2rem 0; border: none; border-top: 1px solid #e5e7eb; }}
+    </style>
+</head>
+<body>
+    <h1>{report_title}</h1>
+    <p class="meta">Generado el {fecha}</p>
+    <div class="resumen">
+        <h2>Resumen del dataset</h2>
+        <ul>
+            <li><strong>Filas:</strong> {n_filas:,}</li>
+            <li><strong>Columnas:</strong> {n_cols}</li>
+            <li><strong>Columnas numéricas:</strong> {num_list}</li>
+            <li><strong>Columnas categóricas:</strong> {cat_list}</li>
+        </ul>
+    </div>
+    <h2>Gráficas</h2>
+    {html_charts}
+</body>
+</html>
+"""
+            st.session_state["report_html"] = report_html
+            st.session_state["report_filename"] = f"informe_datos_{datetime.now().strftime('%Y%m%d_%H%M')}.html"
 
-    # Gráficos genéricos (siempre o si no es contexto energía)
-    st.markdown("---")
-    st.markdown("**Vistas genéricas del dataset**")
-
-    g1, g2 = st.columns(2)
-
-    with g1:
-        if numeric_cols:
-            st.markdown("**Distribución** (histograma)")
-            col_hist = st.selectbox("Columna numérica", numeric_cols, key="hist_col")
-            fig_hist = px.histogram(d, x=col_hist, nbins=min(50, max(10, d[col_hist].nunique())),
-                                    title=f"Distribución de {col_hist}")
-            fig_hist.update_layout(margin=dict(t=40, b=20))
-            fig_hist.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,249,0.8)")
-            st.plotly_chart(fig_hist, use_container_width=True)
-
-        if cat_cols and not energy_mode:
-            st.markdown("**Conteo por categoría**")
-            col_cat = st.selectbox("Columna categórica", cat_cols, key="bar_cat")
-            cnt = d[col_cat].value_counts().reset_index()
-            cnt.columns = [col_cat, "Cantidad"]
-            fig_bar = px.bar(cnt, x=col_cat, y="Cantidad", color="Cantidad", color_continuous_scale="Teal")
-            fig_bar.update_layout(xaxis_tickangle=-45, margin=dict(t=20, b=80))
-            st.plotly_chart(fig_bar, use_container_width=True)
-
-    with g2:
-        if len(numeric_cols) >= 2:
-            st.markdown("**Correlación entre variables numéricas**")
-            num_sub = numeric_cols[:min(8, len(numeric_cols))]
-            corr = d[num_sub].corr()
-            fig_corr = px.imshow(corr, text_auto=".2f", aspect="auto", color_continuous_scale="RdBu_r",
-                                 zmin=-1, zmax=1, title="Matriz de correlación")
-            fig_corr.update_layout(margin=dict(t=40, b=20))
-            st.plotly_chart(fig_corr, use_container_width=True)
-
-        if date_cols and d[date_cols[0]].notna().sum() > 0:
-            st.markdown("**Serie temporal** (conteo por fecha)")
-            col_date = date_cols[0]
-            d_temp = d.copy()
-            d_temp["_fecha"] = pd.to_datetime(d_temp[col_date], errors="coerce")
-            d_temp["_periodo"] = d_temp["_fecha"].dt.to_period("M").astype(str)
-            count_temp = d_temp.dropna(subset=["_fecha"]).groupby("_periodo").size().reset_index(name="Cantidad")
-            if len(count_temp) > 0:
-                fig_temp = px.line(count_temp, x="_periodo", y="Cantidad", markers=True, title=f"Conteo por mes ({col_date})")
-                fig_temp.update_layout(xaxis_tickangle=-45, margin=dict(t=40, b=80))
-                st.plotly_chart(fig_temp, use_container_width=True)
+        if st.session_state.get("report_html"):
+            st.download_button(
+                "Descargar informe (HTML)",
+                data=st.session_state["report_html"].encode("utf-8"),
+                file_name=st.session_state.get("report_filename", "informe_datos.html"),
+                mime="text/html",
+                key="dl_informe",
+            )
