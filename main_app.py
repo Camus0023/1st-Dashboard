@@ -20,14 +20,28 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# --- Estilos visuales (contraste legible en todos los textos) ---
+# --- Estilos visuales: contraste alto (fondos claros, letras oscuras) ---
 st.markdown("""
 <style>
-    /* Texto principal: oscuro sobre claro */
-    .stMarkdown, .stMarkdown p, [data-testid="stMarkdownContainer"] { color: #1a1a1a !important; }
+    /* Fondo general de la app */
+    .stApp, [data-testid="stAppViewContainer"] { background-color: #f5f7f6 !important; }
+    .main .block-container { background-color: #ffffff !important; padding: 1.5rem; border-radius: 8px; }
+    /* Texto principal: siempre oscuro sobre claro */
+    .stMarkdown, .stMarkdown p, [data-testid="stMarkdownContainer"], p { color: #111827 !important; }
     .stCaption, [data-testid="stCaption"] { color: #374151 !important; }
-    label, [data-testid="stWidgetLabel"] { color: #1f2937 !important; font-weight: 500 !important; }
-    .stAlert { color: #1f2937 !important; }
+    label, [data-testid="stWidgetLabel"], .stWidget label { color: #1f2937 !important; font-weight: 500 !important; }
+    .stAlert, [data-testid="stAlert"] { color: #1f2937 !important; background-color: #f9fafb !important; }
+    /* Inputs y selectores: fondo blanco, texto oscuro */
+    input, textarea, [data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea {
+        background-color: #ffffff !important; color: #111827 !important; border: 1px solid #d1d5db !important;
+    }
+    [data-baseweb="select"] { background-color: #ffffff !important; color: #111827 !important; }
+    /* Expander: fondo claro, texto oscuro */
+    [data-testid="stExpander"] { background-color: #ffffff !important; border: 1px solid #e5e7eb !important; }
+    [data-testid="stExpander"] summary, [data-testid="stExpander"] .stMarkdown { color: #1f2937 !important; }
+    /* DataFrames y tablas */
+    [data-testid="stDataFrame"], .stDataFrame { background-color: #ffffff !important; }
+    [data-testid="stDataFrame"] * { color: #111827 !important; }
     /* Caja de bienvenida: texto claro sobre fondo oscuro */
     .welcome-box {
         background: linear-gradient(135deg, #1a5f4a 0%, #2d8f6f 50%, #1a5f4a 100%);
@@ -40,17 +54,10 @@ st.markdown("""
     }
     .welcome-box h1 { color: #ffffff !important; font-size: 2rem; margin-bottom: 0.5rem; font-weight: 700; }
     .welcome-box p { color: rgba(255,255,255,0.98) !important; font-size: 1.05rem; margin: 0; }
-    .upload-zone {
-        background: #f0f4f3;
-        border: 2px dashed #1a5f4a;
-        border-radius: 12px;
-        padding: 2rem;
-        text-align: center;
-        margin-bottom: 1.5rem;
-    }
-    /* KPIs: etiquetas y valores oscuros */
+    .upload-zone { background: #e8f0ee !important; border: 2px dashed #1a5f4a; border-radius: 12px; padding: 2rem; }
+    /* KPIs */
     div[data-testid="stMetric"] {
-        background: #ffffff;
+        background: #ffffff !important;
         padding: 1rem 1.25rem;
         border-radius: 12px;
         box-shadow: 0 2px 12px rgba(0,0,0,0.08);
@@ -58,14 +65,17 @@ st.markdown("""
     }
     div[data-testid="stMetric"] label { color: #1a3d32 !important; font-weight: 600 !important; }
     div[data-testid="stMetric"] [data-testid="stMetricValue"] { color: #111827 !important; }
-    h2, h3 { color: #1a3d32 !important; font-weight: 600 !important; }
-    /* Sidebar */
-    [data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #e5e7eb; }
+    h1, h2, h3 { color: #1a3d32 !important; font-weight: 600 !important; }
+    /* Sidebar: fondo blanco, texto oscuro */
+    [data-testid="stSidebar"] { background-color: #ffffff !important; border-right: 1px solid #e5e7eb; }
+    [data-testid="stSidebar"] * { color: #1f2937 !important; }
     [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2 { color: #1a3d32 !important; font-weight: 700 !important; }
-    [data-testid="stSidebar"] label, [data-testid="stSidebar"] p { color: #1f2937 !important; }
-    /* Botones y controles */
-    .stButton button { color: #1f2937 !important; }
-    .stSelectbox label, .stSlider label { color: #374151 !important; }
+    /* Botones */
+    .stButton button { background-color: #1a5f4a !important; color: #ffffff !important; border: none !important; }
+    .stButton button:hover { background-color: #2d8f6f !important; color: #ffffff !important; }
+    .stDownloadButton button { color: #1f2937 !important; }
+    /* Asistente: caja de respuesta */
+    .asistente-respuesta { background: #ffffff; color: #111827; padding: 1rem; border-radius: 8px; border: 1px solid #e5e7eb; margin-top: 0.5rem; }
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
 </style>
@@ -363,7 +373,7 @@ columnas_tabla = d.columns.tolist()
 st.caption(f"📌 **{len(df_filt)}** de **{len(df)}** filas. Ediciones en Cualitativo se reflejan en Cuantitativo y Gráfico.")
 
 # --- Tabs ---
-tab_cuant, tab_cual, tab_graf = st.tabs(["📊 Cuantitativo", "📋 Cualitativo", "📈 Gráfico"])
+tab_cuant, tab_cual, tab_graf, tab_asist = st.tabs(["📊 Cuantitativo", "📋 Cualitativo", "📈 Gráfico", "🤖 Asistente de análisis"])
 
 # ---------- BLOQUE CUANTITATIVO ----------
 with tab_cuant:
@@ -537,3 +547,81 @@ with tab_graf:
                 mime="text/html",
                 key="dl_informe",
             )
+
+# ---------- ASISTENTE DE ANÁLISIS (Groq - Llama 3.3 70B Versatile) ----------
+with tab_asist:
+    st.subheader("Asistente de análisis con IA")
+    st.markdown("Introduce tu **API Key de Groq** y haz preguntas sobre los datos. El asistente usa el modelo **Llama 3.3 70B Versatile** y tiene contexto del dataset actual (columnas, tipos y resumen).")
+
+    api_key = st.text_input(
+        "API Key de Groq",
+        type="password",
+        placeholder="gsk_...",
+        help="Obtén tu clave en https://console.groq.com. No se guarda; solo se usa en esta sesión.",
+        key="groq_api_key",
+    )
+
+    def get_data_context(d):
+        """Resumen del dataframe para el contexto del asistente."""
+        lines = [
+            f"Dataset: {len(d)} filas, {len(d.columns)} columnas.",
+            "Columnas y tipos: " + ", ".join([f"{c} ({d[c].dtype})" for c in d.columns[:30]]),
+        ]
+        if len(d.columns) > 30:
+            lines.append("... (más columnas)")
+        lines.append("\nPrimeras filas (muestra):")
+        lines.append(d.head(10).to_string())
+        if d.select_dtypes(include=["number"]).columns.any():
+            lines.append("\nEstadísticas descriptivas (numéricas):")
+            lines.append(d.select_dtypes(include=["number"]).describe().round(2).to_string())
+        return "\n".join(lines)
+
+    pregunta = st.text_area(
+        "Pregunta o solicitud de análisis",
+        placeholder="Ej: ¿Qué columnas son numéricas? Resumen de la variable X. ¿Hay valores atípicos?",
+        height=100,
+        key="asistente_pregunta",
+    )
+
+    if st.button("Enviar al asistente", key="btn_asistente"):
+        if not api_key or not api_key.strip():
+            st.error("Introduce tu API Key de Groq para continuar.")
+        elif not pregunta or not pregunta.strip():
+            st.warning("Escribe una pregunta o solicitud de análisis.")
+        else:
+            try:
+                from groq import Groq
+                client = Groq(api_key=api_key.strip())
+                context = get_data_context(d)
+                system_msg = (
+                    "Eres un asistente de análisis de datos. El usuario te proporciona un resumen de su dataset "
+                    "y te hace preguntas. Responde en español, de forma clara y concisa. Si pides más detalle, "
+                    "sugiere qué podría hacer el usuario en el dashboard."
+                )
+                user_msg = (
+                    "Contexto del dataset actual (datos con los que está trabajando el usuario):\n\n"
+                    f"{context}\n\n"
+                    "---\nPregunta del usuario:\n"
+                    f"{pregunta.strip()}"
+                )
+                with st.spinner("Analizando con Llama 3.3 70B Versatile..."):
+                    response = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[
+                            {"role": "system", "content": system_msg},
+                            {"role": "user", "content": user_msg},
+                        ],
+                        max_tokens=1024,
+                        temperature=0.3,
+                    )
+                respuesta = response.choices[0].message.content
+                st.session_state["asistente_ultima_respuesta"] = respuesta
+
+            except Exception as e:
+                st.error(f"Error al llamar a la API de Groq: {e}")
+                if "api_key" in str(e).lower() or "401" in str(e):
+                    st.caption("Comprueba que la API Key sea correcta y esté activa en https://console.groq.com")
+
+    if st.session_state.get("asistente_ultima_respuesta"):
+        st.markdown("**Respuesta del asistente**")
+        st.markdown(st.session_state["asistente_ultima_respuesta"])
