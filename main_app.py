@@ -195,6 +195,42 @@ if df is None or df.empty:
     st.info("👆 **Sube un archivo CSV** arriba o pulsa **Usar datos de ejemplo** para empezar.")
     st.stop()
 
+# --- Cantidad de muestras para el análisis ---
+st.markdown("#### 📐 Cantidad de muestras para el análisis")
+total_filas = len(df)
+default_muestras = min(500, total_filas) if total_filas > 500 else total_filas
+
+samples_col1, samples_col2 = st.columns([2, 1])
+
+with samples_col1:
+    n_slider = st.slider(
+        "Barra: arrastra para elegir cantidad de muestras",
+        min_value=1,
+        max_value=total_filas,
+        value=default_muestras,
+        step=10 if total_filas > 100 else 1,
+        help="Reduce el número para un análisis más rápido. Se toma una muestra aleatoria reproducible.",
+        key="slider_muestras",
+    )
+
+with samples_col2:
+    n_textbox = st.number_input(
+        "O escribe el número exacto",
+        min_value=1,
+        max_value=total_filas,
+        value=n_slider,
+        step=10 if total_filas > 100 else 1,
+        key="number_muestras",
+    )
+
+# Aplicar el valor del textbox (si lo cambió) o el del slider
+n_uso = n_textbox
+if n_uso < total_filas:
+    df = df.sample(n=n_uso, random_state=42)
+    st.caption(f"Se usan **{n_uso:,}** de **{total_filas:,}** filas (muestra aleatoria reproducible).")
+else:
+    st.caption(f"Se usan **todas** las filas (**{total_filas:,}**).")
+
 # Inferir tipos y contexto
 col_types = infer_column_types(df)
 numeric_cols = col_types["numeric"]
